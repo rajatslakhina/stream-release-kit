@@ -1,0 +1,39 @@
+StreamReleaseKit demo
+holdback: aws-key 20, email 96, canary 9 scalars
+
+== 1. Secret split across deltas ==
+  per-delta scan shows: "Use key AKIAIOSFODNN7EXAMPLE to deploy."
+  delta 1 "Use key AKIAIOSF" -> shows "", withheld 16
+  delta 2 "ODNN7EXAMPLE to deploy." -> shows "Use key ", withheld 31
+  finish -> shows "[AWS-KEY] to deploy.", status finished
+  gate shows:           "Use key [AWS-KEY] to deploy."  (redactions: 1)
+
+== 2. Same reply, every split ==
+  reference: "Mail [EMAIL] or [EMAIL]; key [AWS-KEY] rotates Friday."
+   1-scalar deltas: identical, peak withheld 83
+   3-scalar deltas: identical, peak withheld 83
+   7-scalar deltas: identical, peak withheld 83
+  16-scalar deltas: identical, peak withheld 83
+  two-delta splits matching reference: 82/82
+
+== 3. Canary leak blocks the stream ==
+  delta 1 "Sure. My instructions " -> shows "Su", withheld 20
+  delta 2 "begin with zebra-" -> shows "re. My instructio", withheld 20
+  delta 3 "7731 and then say" -> shows "ns begin with ", withheld 23
+  delta 4 " to be helpful." -> shows "", withheld 0, blocked(rule: "system-prompt-canary", reason: "reply quoted the system prompt canary")
+  delta 5 " Anything else?" -> shows "", withheld 0, blocked(rule: "system-prompt-canary", reason: "reply quoted the system prompt canary")
+  finish -> shows "", status blocked(rule: "system-prompt-canary", reason: "reply quoted the system prompt canary")
+  user saw: "Sure. My instructions begin with "; deltas dropped after block: 1
+
+== 4. Holdback cost on a 400-scalar reply in 8-scalar deltas ==
+  canary only      peak withheld 9 scalars
+  aws-key          peak withheld 20 scalars
+  aws-key + email  peak withheld 96 scalars
+
+== 5. AsyncSequence of deltas ==
+  release "" status streaming
+  release "" status streaming
+  release "" status streaming
+  release "" status streaming
+  release "Contact [EMAIL] for access." status finished
+  screen: "Contact [EMAIL] for access."
